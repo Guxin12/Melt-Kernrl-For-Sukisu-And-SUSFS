@@ -163,59 +163,85 @@ jobs:
           esac
 
       - name: 添加 KernelSU
-      run: |
-        # 检查是否在melt目录
-        if [ ! -d "melt" ]; then
-          echo "错误：melt目录不存在！"
-          exit 1
-        fi
-        
-        # 如果不在melt目录，则进入
-        if [ "$(basename $(pwd))" != "melt" ]; then
-          cd melt
-        fi
-        
-        # 移除旧的KernelSU目录（解决重复符号问题）
-        if [ -d "drivers/staging/kernelsu" ]; then
-          echo "移除旧的KernelSU目录: drivers/staging/kernelsu"
-          rm -rf drivers/staging/kernelsu
-        fi
-        
-        if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
-          echo "Adding KernelSU Official..."
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
-        elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
-          echo "Adding KernelSU Next..."
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash $BRANCH
-        elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
-          echo "Adding KernelSU MKSU..."
-          curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
-        elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
-          echo "Adding KernelSU SukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
-          
-          # 修复SukiSU文件位置问题
-          if [ -d "KernelSU" ]; then
-            echo "移动SukiSU文件到正确位置..."
-            mkdir -p drivers/staging/kernelsu
-            mv KernelSU/kernel drivers/staging/kernelsu
-            rm -rf KernelSU
-           
-            # 验证移动结果
-            if [ ! -d "drivers/staging/kernelsu" ]; then
-              echo "❌ 错误：移动SukiSU文件失败！"
-              exit 1
-            fi
-          else
-            echo "❌ 错误：添加SukiSU后未找到KernelSU目录"
+        run: |
+          # 检查是否在melt目录
+          if [ ! -d "melt" ]; then
+            echo "错误：melt目录不存在！"
             exit 1
           fi
-        fi
-        
-        # 返回工作目录
-        if [ "$(basename $(pwd))" == "melt" ]; then
+          
+          # 如果不在melt目录，则进入
+          if [ "$(basename $(pwd))" != "melt" ]; then
+            cd melt
+          fi
+          
+          # 移除旧的KernelSU目录（解决重复符号问题）
+          if [ -d "drivers/staging/kernelsu" ]; then
+            echo "移除旧的KernelSU目录: drivers/staging/kernelsu"
+            rm -rf drivers/staging/kernelsu
+          fi
+          
+          if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
+            echo "Adding KernelSU Official..."
+            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+          elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+            echo "Adding KernelSU Next..."
+            curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash $BRANCH
+          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
+            echo "Adding KernelSU MKSU..."
+            curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "Adding KernelSU SukiSU..."
+            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
+            
+            # 修复SukiSU文件位置问题
+            if [ -d "KernelSU" ]; then
+              echo "移动SukiSU文件到正确位置..."
+              mkdir -p drivers/staging/kernelsu
+              mv KernelSU/kernel drivers/staging/kernelsu
+              rm -rf KernelSU
+              
+              # 验证移动结果
+              if [ ! -d "drivers/staging/kernelsu" ]; then
+                echo "❌ 错误：移动SukiSU文件失败！"
+                exit 1
+              fi
+            else
+              echo "❌ 错误：添加SukiSU后未找到KernelSU目录"
+              exit 1
+            fi
+          fi
+          
+          # 返回工作目录
+          if [ "$(basename $(pwd))" == "melt" ]; then
+            cd ..
+          fi
+
+      - name: 验证 KernelSU 位置
+        run: |
+          cd melt
+          echo "验证KernelSU位置..."
+          
+          case "${{ inputs.kernelsu_variant }}" in
+            "Official" | "MKSU" | "SukiSU")
+              if [ ! -d "drivers/staging/kernelsu" ]; then
+                echo "❌ 错误：KernelSU 未在 drivers/staging/kernelsu"
+                exit 1
+              else
+                echo "KernelSU 位置正确: drivers/staging/kernelsu"
+              fi
+              ;;
+            "Next")
+              if [ ! -d "KernelSU-Next" ]; then
+                echo "❌ 错误：KernelSU-Next 目录不存在"
+                exit 1
+              else
+                echo "KernelSU-Next 位置正确"
+              fi
+              ;;
+          esac
+          
           cd ..
-        fi
 
       - name: 为 KernelSU 变体安装 SUSFS 补丁
         run: |
@@ -240,10 +266,10 @@ jobs:
           # 应用变体特定补丁
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Applying SUSFS patches for Official KernelSU..."
-            cd ./KernelSU
-            cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+            cd ./drivers/staging/kernelsu
+            cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch
-            cd ..
+            cd ../../..
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "Applying SUSFS patches for KernelSU-Next..."
             cd ./KernelSU-Next
@@ -252,13 +278,14 @@ jobs:
             cd ..
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
-            cd ./KernelSU
-            cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+            cd ./drivers/staging/kernelsu
+            cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-            cd ..
+            cd ../../..
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
             # SukiSU不需要额外补丁
+            echo "跳过额外补丁，仅应用主SUSFS补丁"
           fi
 
           # 应用主SUSFS补丁
