@@ -57,7 +57,7 @@ jobs:
       - name: Install build essentials    
         run: |    
           sudo apt-get update    
-          sudo apt-get install -y make flex bison libssl-dev libelf-dev bc build-essential ccache lld zip patch
+          sudo apt-get install -y make flex bison libssl-dev libelf-dev bc build-essential ccache lld zip patch wget
           
           # 设置ccache    
           sudo mkdir /ccache    
@@ -81,28 +81,60 @@ jobs:
 
       - name: Download Clang    
         run: |    
-          mkdir clang    
-          echo "下载 Clang 编译��..."    
-          wget -q --show-progress --progress=bar:force -O clang.tar.gz \    
-            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"    
-              
-          # 验证下载完整性    
-          if [ $(stat -c%s clang.tar.gz) -lt 100000000 ]; then    
-            echo "❌ 错误：下载文件不完整"    
-            exit 1    
-          fi    
+          mkdir -p clang    
+          echo "下载 Clang 编译器..."    
+          
+          # 使用可靠的镜像��
+          CLANG_URL="https://mirror.ghproxy.com/https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
+          
+          # 使用重试机制下载
+          for i in {1..3}; do
+            echo "尝试下载 Clang (第 $i 次)..."
+            if wget --tries=3 --waitretry=5 --progress=bar:force -O clang.tar.gz "$CLANG_URL"; then
+              # 验证下载完整性
+              if [ $(stat -c%s clang.tar.gz) -gt 100000000 ]; then
+                echo "下载成功！文件大小: $(stat -c%s clang.tar.gz) 字节"
+                break
+              else
+                echo "下载文件太小($(stat -c%s clang.tar.gz)字节)，可能不完整"
+                if [ $i -lt 3 ]; then
+                  echo "等待 5 秒后重试..."
+                  sleep 5
+                fi
+                rm -f clang.tar.gz
+              fi
+            else
+              echo "下载失败"
+              if [ $i -lt 3 ]; then
+                echo "等待 5 秒后重试..."
+                sleep 5
+              fi
+              rm -f clang.tar.gz
+            fi
+          done
+          
+          # 检查是否下载成功
+          if [ ! -f "clang.tar.gz" ]; then
+            echo "❌ 错误：Clang 下载失败"
+            exit 1
+          fi
               
           echo "解压 Clang..."    
           tar -zxf clang.tar.gz -C clang    
               
           # 确保ld.lld存在    
-          [ ! -f "clang/bin/ld.lld" ] && ln -s $(which ld.lld) clang/bin/ld.lld    
+          if [ ! -f "clang/bin/ld.lld" ]; then
+            echo "创建 ld.lld 链接"
+            ln -s $(which ld.lld) clang/bin/ld.lld || true
+          fi
               
           echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV    
           echo "=== Clang 版本 ==="    
-          clang/bin/clang --version | head -1    
-          clang/bin/ld.lld --version | head -1    
+          clang/bin/clang --version | head -1 || echo "无法获取Clang版本"    
+          clang/bin/ld.lld --version | head -1 || echo "无法获取ld.lld版本"    
           echo "=================="    
+          # 清理下载文件
+          rm -f clang.tar.gz
 
       - name: 确定 KernelSU 的分支
         run: |
