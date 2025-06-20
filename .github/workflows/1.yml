@@ -1,0 +1,163 @@
+name: Kernel Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "选择构建类型"
+        required: true
+        default: "image"
+        type: choice
+        options:
+          - image
+          - ak3
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          repository: Guxin12/android_kernel_xiaomi_marble
+          ref: melt-rebase
+          fetch-depth: 1
+          lfs: false
+
+      - name: Install build essentials
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make flex bison libssl-dev libelf-dev bc build-essential ccache lld zip
+          
+          # 设置ccache
+          sudo mkdir /ccache
+          sudo chmod 777 /ccache
+          echo "CCACHE_DIR=/ccache" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=2G" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+          
+          echo "REPO_ROOT=$(pwd)" >> $GITHUB_ENV
+          echo "SYS_PATH=/usr/bin" >> $GITHUB_ENV
+          
+          # 验证工具安装
+          echo "=== 工具版本 ==="
+          make --version | head -1
+          gcc --version | head -1
+          flex --version
+          bison --version
+          ccache --version
+          ld.lld --version || echo "ld.lld available"
+          echo "================"
+
+      - name: Download Clang
+        run: |
+          mkdir clang
+          echo "下载 Clang 编译器..."
+          wget -q --show-progress --progress=bar:force -O clang.tar.gz \
+            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
+          
+          # 验证下载完整性
+          if [ $(stat -c%s clang.tar.gz) -lt 100000000 ]; then
+            echo "❌ 错误：下载文件不完整"
+            exit 1
+          fi
+          
+          echo "解压 Clang..."
+          tar -zxf clang.tar.gz -C clang
+          
+          # 确保ld.lld存在
+          [ ! -f "clang/bin/ld.lld" ] && ln -s $(which ld.lld) clang/bin/ld.lld
+          
+          echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV
+          echo "=== Clang 版本 ==="
+          clang/bin/clang --version | head -1
+          clang/bin/ld.lld --version | head -1
+          echo "=================="
+
+      - name: Build kernel (without LTO)
+        run: |
+          # 设置编译环境
+          export PATH="${{ env.CLANG_PATH }}:/usr/lib/ccache:${{ env.SYS_PATH }}:$PATH"
+          export CC="ccache clang"
+          export CXX="ccache clang++"
+          
+          # 清理并配置
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 O=out mrproper
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 O=out marble_defconfig
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 O=out -j$(nproc --all)
+          
+          # 显示缓存统计
+          ccache -s
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts
+          cp out/arch/arm64/boot/Image artifacts/kernel.img
+          
+          # 获取内核版本
+          grep -a "Linux version" out/vmlinux | awk '{print $3}' | head -1 > artifacts/kernel_version.txt
+          
+          echo "BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M')" >> $GITHUB_ENV
+          echo "KERNEL_VERSION=$(cat artifacts/kernel_version.txt)" >> $GITHUB_ENV
+          
+          echo "=== 构建信息 ==="
+          echo "版本: $(cat artifacts/kernel_version.txt)"
+          echo "日期: ${{ env.BUILD_DATE }}"
+          echo "================"
+
+      - name: Upload kernel image
+        if: ${{ inputs.build_type == 'image' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-image
+          path: artifacts/kernel.img
+
+      - name: Package AK3
+        if: ${{ inputs.build_type == 'ak3' }}
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 ak3
+          cp artifacts/kernel.img ak3/Image
+          
+          # 更新anykernel.sh配置
+          sed -i \
+            -e "s|kernel\.string=.*|kernel.string=Marble-Kernel-${{ env.KERNEL_VERSION }}|" \
+            -e "s|device\.name1=.*|device.name1=marble|" \
+            -e "s|device\.name2=.*|device.name2=marblein|" \
+            ak3/anykernel.sh
+          
+          # 打包ZIP
+          cd ak3
+          zip -r9 "../artifacts/marble_melt_${{ env.KERNEL_VERSION }}.zip" *
+          
+          echo "AK3_PATH=artifacts/marble_melt_${{ env.KERNEL_VERSION }}.zip" >> $GITHUB_ENV
+
+      - name: Upload AK3 package
+        if: ${{ inputs.build_type == 'ak3' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-ak3
+          path: ${{ env.AK3_PATH }}
+
+      - name: Create build summary
+        run: |
+          echo "### 🚀 内核构建报告" >> $GITHUB_STEP_SUMMARY
+          echo "#### 源码信息" >> $GITHUB_STEP_SUMMARY
+          echo "- 仓库: [Guxin12/android_kernel_xiaomi_marble](https://github.com/Guxin12/android_kernel_xiaomi_marble)" >> $GITHUB_STEP_SUMMARY
+          echo "- 分支: \`melt-rebase\`" >> $GITHUB_STEP_SUMMARY
+          echo "#### 构建参数" >> $GITHUB_STEP_SUMMARY
+          echo "- 类型: \`${{ inputs.build_type }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 配置: \`marble_defconfig\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 优化: \`O3 (无LTO)\`" >> $GITHUB_STEP_SUMMARY
+          echo "#### 版本信息" >> $GITHUB_STEP_SUMMARY
+          echo "- 内核版本: \`${{ env.KERNEL_VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 构建时间: \`${{ env.BUILD_DATE }} UTC\`" >> $GITHUB_STEP_SUMMARY
+          echo "#### 输出文件" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.build_type }}" = "image" ]; then
+            echo "- Kernel Image: \`kernel.img\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- AK3 Package: \`$(basename ${{ env.AK3_PATH }})\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "> 构建ID: [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
