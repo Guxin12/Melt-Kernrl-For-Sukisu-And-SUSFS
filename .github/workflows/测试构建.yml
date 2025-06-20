@@ -198,7 +198,7 @@ jobs:
             if [ -d "KernelSU" ]; then
               echo "移动SukiSU文件到正确位置..."
               mv KernelSU/kernel drivers/staging/kernelsu
-              rm -rf KernelSU
+              chmod -R u+w drivers/staging/kernelsu
               
               # 验证移动结果
               if [ ! -d "drivers/staging/kernelsu" ]; then
@@ -241,7 +241,7 @@ jobs:
           esac
           
           cd ..
-
+          
       - name: 为 KernelSU 变体安装 SUSFS 补丁
         run: |
           # 检查是否在melt目录
@@ -348,31 +348,7 @@ jobs:
             cd ..
           fi
 
-      # 添加的修复步骤 - 清理残留符号链接和无效目录
-      - name: 清理残留符号链接和无效目录
-        run: |
-          # 检查是否在melt目录
-          if [ ! -d "melt" ]; then
-            echo "错误：melt目录不存在！"
-            exit 1
-          fi
-          
-          # 进入melt目录
-          cd melt
-          
-          echo "清理残留符号链接和无效目录..."
-          
-          # 删除所有损坏的符号链接
-          find . -type l ! -exec test -e {} \; -print -delete
-          
-          # 检查并修复 staging/kernelsu 的权限
-          if [ -d "drivers/staging/kernelsu" ]; then
-            echo "修复 drivers/staging/kernelsu 目录权限..."
-            chmod -R u+w drivers/staging/kernelsu
-          fi
-          
-          # 返回工作目录
-          cd ..
+
 
       - name: Build kernel (without LTO)    
         run: |    
