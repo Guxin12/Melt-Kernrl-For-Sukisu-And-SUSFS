@@ -163,42 +163,59 @@ jobs:
           esac
 
       - name: 添加 KernelSU
-        run: |
-          # 检查是否在melt目录
-          if [ ! -d "melt" ]; then
-            echo "错误：melt目录不存在！"
+      run: |
+        # 检查是否在melt目录
+        if [ ! -d "melt" ]; then
+          echo "错误：melt目录不存在！"
+          exit 1
+        fi
+        
+        # 如果不在melt目录，则进入
+        if [ "$(basename $(pwd))" != "melt" ]; then
+          cd melt
+        fi
+        
+        # 移除旧的KernelSU目录（解决重复符号问题）
+        if [ -d "drivers/staging/kernelsu" ]; then
+          echo "移除旧的KernelSU目录: drivers/staging/kernelsu"
+          rm -rf drivers/staging/kernelsu
+        fi
+        
+        if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
+          echo "Adding KernelSU Official..."
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+        elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+          echo "Adding KernelSU Next..."
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash $BRANCH
+        elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
+          echo "Adding KernelSU MKSU..."
+          curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+        elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+          echo "Adding KernelSU SukiSU..."
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
+          
+          # 修复SukiSU文件位置问题
+          if [ -d "KernelSU" ]; then
+            echo "移动SukiSU文件到正确位置..."
+            mkdir -p drivers/staging/kernelsu
+            mv KernelSU/kernel drivers/staging/kernelsu
+            rm -rf KernelSU
+           
+            # 验证移动结果
+            if [ ! -d "drivers/staging/kernelsu" ]; then
+              echo "❌ 错误：移动SukiSU文件失败！"
+              exit 1
+            fi
+          else
+            echo "❌ 错误：添加SukiSU后未找到KernelSU目录"
             exit 1
           fi
-          
-          # 如果不在melt目录，则进入
-          if [ "$(basename $(pwd))" != "melt" ]; then
-            cd melt
-          fi
-          
-          # 移除旧的KernelSU目录（解决重复符号问题）
-          if [ -d "drivers/staging/kernelsu" ]; then
-            echo "移除旧的KernelSU目录: drivers/staging/kernelsu"
-            rm -rf drivers/staging/kernelsu
-          fi
-          
-          if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
-            echo "Adding KernelSU Official..."
-            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
-          elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
-            echo "Adding KernelSU Next..."
-            curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash $BRANCH
-          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
-            echo "Adding KernelSU MKSU..."
-            curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
-          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
-            echo "Adding KernelSU SukiSU..."
-            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
-          fi
-          
-          # 返回工作目录
-          if [ "$(basename $(pwd))" == "melt" ]; then
-            cd ..
-          fi
+        fi
+        
+        # 返回工作目录
+        if [ "$(basename $(pwd))" == "melt" ]; then
+          cd ..
+        fi
 
       - name: 为 KernelSU 变体安装 SUSFS 补丁
         run: |
