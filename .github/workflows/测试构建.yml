@@ -197,7 +197,6 @@ jobs:
             # 修复SukiSU文件位置问题
             if [ -d "KernelSU" ]; then
               echo "移动SukiSU文件到正确位置..."
-              mkdir -p drivers/staging/kernelsu
               mv KernelSU/kernel drivers/staging/kernelsu
               rm -rf KernelSU
               
