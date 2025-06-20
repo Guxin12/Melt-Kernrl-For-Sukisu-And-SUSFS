@@ -348,6 +348,38 @@ jobs:
             cd ..
           fi
 
+      # 添加的修复步骤 - 清理残留符号链接和无效目录
+      - name: 清理残留符号链接和无效目录
+        run: |
+          # 检查是否在melt目录
+          if [ ! -d "melt" ]; then
+            echo "错误：melt目录不存在！"
+            exit 1
+          fi
+          
+          # 进入melt目录
+          cd melt
+          
+          echo "清理残留符号链接和无效目录..."
+          
+          # 删除所有损坏的符号链接
+          find . -type l ! -exec test -e {} \; -print -delete
+          
+          # 特别检查并删除 drivers/kernelsu 目录（如果存在）
+          if [ -d "drivers/kernelsu" ]; then
+            echo "删除残留的 drivers/kernelsu 目录..."
+            rm -rf drivers/kernelsu
+          fi
+          
+          # 检查并修复 staging/kernelsu 的权限
+          if [ -d "drivers/staging/kernelsu" ]; then
+            echo "修复 drivers/staging/kernelsu 目录权限..."
+            chmod -R u+w drivers/staging/kernelsu
+          fi
+          
+          # 返回工作目录
+          cd ..
+
       - name: Build kernel (without LTO)    
         run: |    
           # 检查是否在melt目录
