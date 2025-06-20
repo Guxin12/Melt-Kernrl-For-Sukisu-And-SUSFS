@@ -1,4 +1,4 @@
-name: Kernel Builder
+name: Melt 5.10 Kernel Builder
 
 on:
   workflow_dispatch:
@@ -84,7 +84,7 @@ jobs:
           mkdir -p clang    
           echo "下载 Clang 编译器..."    
           
-          # 使用可靠的镜像��
+          # 使用可靠的镜像源
           CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
           
           # 使用重试机制下载
@@ -175,6 +175,12 @@ jobs:
             cd melt
           fi
           
+          # 移除旧的KernelSU目录（解决重复符号问题）
+          if [ -d "drivers/staging/kernelsu" ]; then
+            echo "移除旧的KernelSU目录: drivers/staging/kernelsu"
+            rm -rf drivers/staging/kernelsu
+          fi
+          
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Adding KernelSU Official..."
             curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
@@ -261,12 +267,10 @@ jobs:
           
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "Applying hooks for KernelSU-Next..."
-            # 注意：路径已修正为从根目录开始
             cp ../susfs4ksu/kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
             patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying hooks for SukiSU..."
-            # 注意：路径已修正为从根目录开始
             cp ../SukiSU_patch/hooks/syscall_hooks.patch ./
             patch -p1 -F 3 < syscall_hooks.patch
           fi
@@ -290,10 +294,8 @@ jobs:
           fi
           
           if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
-            # 注意：路径已修正为从根目录开始
             cp ../SukiSU_patch/69_hide_stuff.patch ./
           else
-            # 注意：路径已修正为从根目录开始
             cp ../susfs4ksu/kernel_patches/69_hide_stuff.patch ./
           fi
           patch -p1 -F 3 < 69_hide_stuff.patch
