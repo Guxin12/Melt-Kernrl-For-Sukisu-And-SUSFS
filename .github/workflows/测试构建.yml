@@ -177,17 +177,18 @@ jobs:
                     
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Adding KernelSU Official..."
-            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH || { echo "❌ 添加KernelSU失败"; exit 1; }
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "Adding KernelSU Next..."
-            curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash $BRANCH
+            curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash $BRANCH || { echo "❌ 添加KernelSU-Next失败"; exit 1; }
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Adding KernelSU MKSU..."
-            curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+            curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH || { echo "❌ 添加KernelSU-MKSU失败"; exit 1; }
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Adding KernelSU SukiSU..."
-            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
-            
+            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH || { echo "❌ 添加SukiSU失败"; exit 1; }
+          fi
+          
           # 返回工作目录
           if [ "$(basename $(pwd))" == "melt" ]; then
             cd ..
@@ -218,19 +219,19 @@ jobs:
             echo "Applying SUSFS patches for Official KernelSU..."
             cd ./drivers/staging/kernelsu
             cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch
+            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || echo "⚠️ 补丁应用可能有警告"
             cd ../../..
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "Applying SUSFS patches for KernelSU-Next..."
             cd ./KernelSU-Next
             curl -LSs "https://raw.githubusercontent.com/zzh20188/GKI_KernelSU_SUSFS/dev/0001-kernel-patch-susfs-v1.5.7-to-KernelSU-Next-v1.0.7.patch" -o susfs.patch
-            patch -p1 --forward < susfs.patch || true
+            patch -p1 --forward < susfs.patch || echo "⚠️ 补丁应用可能有警告"
             cd ..
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
             cd ./drivers/staging/kernelsu
             cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
+            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || echo "⚠️ 补丁应用可能有警告"
             cd ../../..
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
@@ -239,7 +240,7 @@ jobs:
           fi
 
           # 应用主SUSFS补丁
-          patch -p1 --fuzz=3 < 50_add_susfs_in_gki-android12-5.10.patch || true
+          patch -p1 --fuzz=3 < 50_add_susfs_in_gki-android12-5.10.patch || echo "⚠️ 主补丁应用可能有警告"
           
           # 返回工作目录
           if [ "$(basename $(pwd))" == "melt" ]; then
@@ -262,11 +263,11 @@ jobs:
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "Applying hooks for KernelSU-Next..."
             cp ../susfs4ksu/kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
-            patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
+            patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch || { echo "❌ HOOKS补丁应用失败"; exit 1; }
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying hooks for SukiSU..."
             cp ../SukiSU_patch/hooks/syscall_hooks.patch ./
-            patch -p1 -F 3 < syscall_hooks.patch
+            patch -p1 -F 3 < syscall_hooks.patch || { echo "❌ SukiSU HOOKS补丁应用失败"; exit 1; }
           fi
           
           # 返回工作目录
@@ -292,7 +293,7 @@ jobs:
           else
             cp ../susfs4ksu/kernel_patches/69_hide_stuff.patch ./
           fi
-          patch -p1 -F 3 < 69_hide_stuff.patch
+          patch -p1 -F 3 < 69_hide_stuff.patch || { echo "⚠️ 隐藏特征补丁应用有警告"; }
           
           # 返回工作目录
           if [ "$(basename $(pwd))" == "melt" ]; then
@@ -325,7 +326,7 @@ jobs:
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 O=out olddefconfig
               
           # 构建内核    
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 O=out -j$(nproc --all)    
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 O=out -j$(nproc --all) || { echo "❌ 内核编译失败"; exit 1; }
               
           # 显示缓存统计    
           ccache -s
@@ -358,24 +359,25 @@ jobs:
           
           # 下载patch工具
           echo "下载KPM修补工具..."
-          curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU_patch/main/kpm/patch_linux" -o patch_kpm
+          curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU_patch/main/kpm/patch_linux" -o patch_kpm || { echo "❌ 下载KPM工具失败"; exit 1; }
           chmod +x patch_kpm
           
           # 创建临时目录并复制Image文件
           mkdir -p kpm_temp
-          cp $IMAGE_PATH kpm_temp/Image
+          cp $IMAGE_PATH kpm_temp/Image || { echo "❌ 复制Image文件失败"; exit 1; }
           
           # 进入临时目录执行修补
           cd kpm_temp
-          ../patch_kpm
+          ../patch_kpm || { echo "❌ KPM修补失败"; exit 1; }
           
           # 检查是否修补成功
           if [ -f "oImage" ]; then
             # 替换原Image文件
             mv oImage ../$IMAGE_PATH
-            echo "Image文件修补成功！"
+            echo "✅ Image文件修补成功！"
           else
-            echo "警告：修补可能失败，未生成oImage文件"
+            echo "❌ 警告：修补可能失败，未生成oImage文件"
+            exit 1
           fi
           
           # 清理临时文件
@@ -389,10 +391,10 @@ jobs:
       - name: Prepare artifacts    
         run: |    
           mkdir -p artifacts    
-          cp melt/out/arch/arm64/boot/Image artifacts/kernel.img    
+          cp melt/out/arch/arm64/boot/Image artifacts/kernel.img || { echo "❌ 复制内核���像失败"; exit 1; }    
               
           # 获取内核版本    
-          grep -a "Linux version" melt/out/vmlinux | awk '{print $3}' | head -1 > artifacts/kernel_version.txt    
+          grep -a "Linux version" melt/out/vmlinux | awk '{print $3}' | head -1 > artifacts/kernel_version.txt || echo "⚠️ 无法获取内核版本"    
               
           echo "BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M')" >> $GITHUB_ENV    
           echo "KERNEL_VERSION=$(cat artifacts/kernel_version.txt)" >> $GITHUB_ENV    
@@ -412,8 +414,8 @@ jobs:
       - name: Package AK3    
         if: ${{ inputs.build_type == 'ak3' }}    
         run: |    
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 ak3    
-          cp artifacts/kernel.img ak3/Image    
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 ak3 || { echo "❌ 克隆AnyKernel3失败"; exit 1; }    
+          cp artifacts/kernel.img ak3/Image || { echo "❌ 复制内核到AK3失败"; exit 1; }    
               
           # 更新anykernel.sh配置    
           sed -i \    
@@ -424,7 +426,7 @@ jobs:
               
           # 打包ZIP    
           cd ak3    
-          zip -r9 "../artifacts/marble_melt_${{ env.KERNEL_VERSION }}.zip" *    
+          zip -r9 "../artifacts/marble_melt_${{ env.KERNEL_VERSION }}.zip" * || { echo "❌ 打包AK3失败"; exit 1; }    
               
           echo "AK3_PATH=artifacts/marble_melt_${{ env.KERNEL_VERSION }}.zip" >> $GITHUB_ENV    
 
