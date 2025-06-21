@@ -175,11 +175,9 @@ jobs:
             cd melt
           fi
           
-          # 移除旧的KernelSU目录（解决重复符号问题）
-          if [ -d "drivers/staging/kernelsu" ]; then
-            echo "移除旧的KernelSU目录: drivers/staging/kernelsu"
-            rm -rf drivers/staging/kernelsu
-          fi
+          # 关键修复：彻底清理旧KernelSU目录
+          echo "彻底清理旧KernelSU目录..."
+          rm -rf drivers/kernelsu drivers/staging/kernelsu
           
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Adding KernelSU Official..."
@@ -210,6 +208,16 @@ jobs:
               exit 1
             fi
           fi
+          
+          # 关键修复：删除残留的drivers/kernelsu目录（如果存在）
+          if [ -d "drivers/kernelsu" ]; then
+            echo "删除残留的drivers/kernelsu目录..."
+            rm -rf drivers/kernelsu
+          fi
+          
+          # 关键修复：修复顶层Makefile引用
+          echo "修复顶层Makefile引用..."
+          sed -i '/drivers\/kernelsu/d' Makefile
           
           # 返回工作目录
           if [ "$(basename $(pwd))" == "melt" ]; then
@@ -347,8 +355,6 @@ jobs:
           if [ "$(basename $(pwd))" == "melt" ]; then
             cd ..
           fi
-
-
 
       - name: Build kernel (without LTO)    
         run: |    
