@@ -174,11 +174,7 @@ jobs:
           if [ "$(basename $(pwd))" != "melt" ]; then
             cd melt
           fi
-          
-          # 关键修复：彻底清理旧KernelSU目录
-          echo "彻底清理旧KernelSU目录..."
-          rm -rf drivers/kernelsu drivers/staging/kernelsu
-          
+                    
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Adding KernelSU Official..."
             curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
@@ -192,63 +188,10 @@ jobs:
             echo "Adding KernelSU SukiSU..."
             curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
             
-            # 修复SukiSU文件位置问题
-            if [ -d "KernelSU" ]; then
-              echo "移动SukiSU文件到正确位置..."
-              mv KernelSU/kernel drivers/staging/kernelsu
-              chmod -R u+w drivers/staging/kernelsu
-              
-              # 验证移动结果
-              if [ ! -d "drivers/staging/kernelsu" ]; then
-                echo "❌ 错误：移动SukiSU文件失败！"
-                exit 1
-              fi
-            else
-              echo "❌ 错误：添加SukiSU后未找到KernelSU目录"
-              exit 1
-            fi
-          fi
-          
-          # 关键修复：删除残留的drivers/kernelsu目录（如果存在）
-          if [ -d "drivers/kernelsu" ]; then
-            echo "删除残留的drivers/kernelsu目录..."
-            rm -rf drivers/kernelsu
-          fi
-          
-          # 关键修复：修复顶层Makefile引用
-          echo "修复顶层Makefile引用..."
-          sed -i '/drivers\/kernelsu/d' Makefile
-          
           # 返回工作目录
           if [ "$(basename $(pwd))" == "melt" ]; then
             cd ..
           fi
-
-      - name: 验证 KernelSU 位置
-        run: |
-          cd melt
-          echo "验证KernelSU位置..."
-          
-          case "${{ inputs.kernelsu_variant }}" in
-            "Official" | "MKSU" | "SukiSU")
-              if [ ! -d "drivers/staging/kernelsu" ]; then
-                echo "❌ 错误：KernelSU 未在 drivers/staging/kernelsu"
-                exit 1
-              else
-                echo "KernelSU 位置正确: drivers/staging/kernelsu"
-              fi
-              ;;
-            "Next")
-              if [ ! -d "KernelSU-Next" ]; then
-                echo "❌ 错误：KernelSU-Next 目录不存在"
-                exit 1
-              else
-                echo "KernelSU-Next 位置正确"
-              fi
-              ;;
-          esac
-          
-          cd ..
           
       - name: 为 KernelSU 变体安装 SUSFS 补丁
         run: |
