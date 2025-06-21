@@ -175,7 +175,7 @@ jobs:
             cd melt
           fi
           
-#          rm -rf drivers/staging/kernelsu
+          # rm -rf drivers/staging/kernelsu
                     
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Adding KernelSU Official..."
@@ -304,7 +304,7 @@ jobs:
             cd ..
           fi
 
-      - name: Build kernel 
+      - name: Build kernel
         run: |    
           # 检查是否在melt目录
           if [ ! -d "melt" ]; then
